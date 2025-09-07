@@ -19,10 +19,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Artemis.Plugins.Devices.VialRGB
-          path: src/Artemis.Plugins.Devices.VialRGB/bin/x64/Release/net7.0/publish
+          path: src/Artemis.Plugins.Devices.VialRGB/bin/x64/Release/net8.0/publish
 
       - name: Upload Artemis.Plugins.VialRGB
         uses: actions/upload-artifact@v4
         with:
           name: Artemis.Plugins.VialRGB
-          path: src/Artemis.Plugins.VialRGB/bin/x64/Release/net7.0/publish
+          path: src/Artemis.Plugins.VialRGB/bin/x64/Release/net8.0/publish
