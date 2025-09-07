@@ -15,7 +15,14 @@ jobs:
         run: dotnet publish -c Release src
 
       # You'll need to fill in the name of your plugin here
-      # - name: Upload
-      #   uses: actions/upload-artifact@v3
-      #   with:
-      #     path: src/{{pluginName}}/bin/x64/Release/net7.0/publish
+      - name: Upload Artemis.Plugins.Devices.VialRGB
+        uses: actions/upload-artifact@v3
+        with:
+          name: Artemis.Plugins.Devices.VialRGB
+          path: src/Artemis.Plugins.Devices.VialRGB/bin/x64/Release/net7.0/publish
+
+      - name: Upload Artemis.Plugins.VialRGB
+        uses: actions/upload-artifact@v3
+        with:
+          name: Artemis.Plugins.VialRGB
+          path: src/Artemis.Plugins.VialRGB/bin/x64/Release/net7.0/publish
