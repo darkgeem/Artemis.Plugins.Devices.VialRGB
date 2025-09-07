@@ -1,0 +1,14 @@
+{
+    "Guid": "596F66E5-C8EA-44E8-A3D3-21D5CF2CABBC",
+    "Api": "1.0",
+    "Name": "Vial RGB",
+    "Author": "Ikeiwa",
+    "Website": "https://ikeiwa.dev/",
+    "Repository": "https://github.com/Ikeiwa/Artemis.Plugins.VialRGB",
+    "Icon": "VialRGB.png",
+    "Description": "Add support to devices with VialRGB direct control protocol",
+    "Version": "1.0.0.0",
+    "Main": "Artemis.Plugins.Devices.VialRGB.dll",
+    "AutoEnableFeatures": false,
+    "Platforms": "Windows"
+}
