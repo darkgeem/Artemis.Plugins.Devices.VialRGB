@@ -49,22 +49,40 @@ public class VialRgbDeviceProvider : AbstractRGBDeviceProvider
     {
         VialDevice[]? devices = null;
         
-        devices = SharpVialRGB.VialRGB.GetAllDevices();
+		try
+		{
+        	devices = SharpVialRGB.VialRGB.GetAllDevices();
+		}
+		catch (Exception ex)
+		{
+			// Log the exception if you have logging available
+			yield break;
+		}
 
         if (devices == null)
             yield break;
 
         foreach (var device in devices)
         {
-            VialRGBUpdateQueue updateQueue = new VialRGBUpdateQueue(GetUpdateTrigger(), device);
+			try
+			{
+				VialRGBUpdateQueue updateQueue = new VialRGBUpdateQueue(GetUpdateTrigger(), device);
 
-            device.Connect();
-            device.EnableDirectRgb();
-            
-            var vialDevice = new VialRGBDevice(new VialRGBDeviceInfo(device), updateQueue);
-            _devices.Add(vialDevice);
+				device.Connect();
+				device.EnableDirectRgb();
+				
+				var vialDevice = new VialRGBDevice(new VialRGBDeviceInfo(device), updateQueue);
+				_devices.Add(vialDevice);
 
-            yield return vialDevice;
+				yield return vialDevice;
+			}
+			catch (Exception ex)
+			{
+				// Log the exception and continue with next device
+				// This ensures one failing device doesn't crash the entire provider
+				try { device.Dispose(); } catch { }
+				continue;
+			}
         }
     }
 

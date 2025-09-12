@@ -422,13 +422,21 @@ public static class VialRGB
 
         foreach (var deviceInfo in devices)
         {
-            if (deviceInfo.SerialNumber.Contains(VialConstants.VIAL_SERIAL_NUMBER_MAGIC) && IsRawHid(deviceInfo) &&
-                IsVialRgb(deviceInfo))
-            {
-                var device = deviceInfo.ConnectToDevice();
-                if (VialRgbGetModes(device).Contains(VialConstants.VIALRGB_EFFECT_DIRECT))
-                    foundDevices.Add(deviceInfo);
-            }
+			try
+			{
+				if (deviceInfo.SerialNumber.Contains(VialConstants.VIAL_SERIAL_NUMBER_MAGIC) && IsRawHid(deviceInfo) &&
+					IsVialRgb(deviceInfo))
+				{
+					var device = deviceInfo.ConnectToDevice();
+					if (VialRgbGetModes(device).Contains(VialConstants.VIALRGB_EFFECT_DIRECT))
+						foundDevices.Add(deviceInfo);
+				}
+			}
+			catch (Exception)
+			{
+				// Device doesn't support VialRGB or has incompatible version - skip it
+				continue;
+			}
         }
 
         return foundDevices.ToArray();
@@ -436,32 +444,43 @@ public static class VialRGB
 
     private static ushort[] VialRgbGetModes(Device dev)
     {
-        var data = HidSend(dev, new[] { VialConstants.CMD_VIA_LIGHTING_GET_VALUE, VialConstants.VIALRGB_GET_INFO }, 20)
-            .GetOffseted(2);
+		try
+		{
+			var data = HidSend(dev, new[] { VialConstants.CMD_VIA_LIGHTING_GET_VALUE, VialConstants.VIALRGB_GET_INFO }, 20)
+				.GetOffseted(2);
 
-        var rgbVersion = data[0] | (data[1] << 8);
-        if (rgbVersion != 1)
-            throw new ApplicationException($"Unsupported VialRGB protocol ({rgbVersion})");
+			var rgbVersion = data[0] | (data[1] << 8);
+			if (rgbVersion != 1) {
+				// Instead of throwing an exception, return an empty array
+				// throw new ApplicationException($"Unsupported VialRGB protocol ({rgbVersion})");
+				return new ushort[0];
+			}
 
-        var rgbSupportedEffects = new List<ushort>();
-        uint maxEffects = 0;
+			var rgbSupportedEffects = new List<ushort>();
+			uint maxEffects = 0;
 
-        while (maxEffects < 0xFFFF)
-        {
-            data = HidSend(dev,
-                StructPacker.Pack("<BBH", VialConstants.CMD_VIA_LIGHTING_GET_VALUE, VialConstants.VIALRGB_GET_SUPPORTED,
-                    maxEffects)).GetOffseted(2);
+			while (maxEffects < 0xFFFF)
+			{
+				data = HidSend(dev,
+					StructPacker.Pack("<BBH", VialConstants.CMD_VIA_LIGHTING_GET_VALUE, VialConstants.VIALRGB_GET_SUPPORTED,
+						maxEffects)).GetOffseted(2);
 
-            for (int i = 0; i < data.Length - 1; i += 2)
-            {
-                var value = GetUShortFromBytes(data.Get(i, i + 2), true);
-                if (value != 0xFFFF)
-                    rgbSupportedEffects.Add(value);
-                maxEffects = Math.Max(maxEffects, value);
-            }
-        }
+				for (int i = 0; i < data.Length - 1; i += 2)
+				{
+					var value = GetUShortFromBytes(data.Get(i, i + 2), true);
+					if (value != 0xFFFF)
+						rgbSupportedEffects.Add(value);
+					maxEffects = Math.Max(maxEffects, value);
+				}
+			}
 
-        return rgbSupportedEffects.ToArray();
+			return rgbSupportedEffects.ToArray();
+		}
+		catch (Exception)
+		{
+			// Return empty array if any error occurs during mode detection
+			return new ushort[0];
+		}
     }
 
     internal static VialRgbLed[] VialRgbGetLeds(Device dev)
