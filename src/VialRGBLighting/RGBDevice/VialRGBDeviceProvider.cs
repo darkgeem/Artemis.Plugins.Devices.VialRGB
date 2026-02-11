@@ -23,7 +23,7 @@ public class VialRgbDeviceProvider : AbstractRGBDeviceProvider
 		}
 	}
 	
-	private readonly Dictionary<string, VialRGBDevice> _devices;
+	private List<VialRGBDevice> _devices;
 	private System.Threading.Timer? _deviceMonitor;
 	private readonly object _devicesLock = new object();
 	
@@ -36,7 +36,7 @@ public class VialRgbDeviceProvider : AbstractRGBDeviceProvider
 		if(_instance != null) throw new InvalidOperationException($"There can be only one instance of type {nameof(VialRgbDeviceProvider)}");
 		_instance = this;
 
-		_devices = new Dictionary<string, VialRGBDevice>();
+		_devices = new List<VialRGBDevice>();
 	}
 	
 	#endregion
@@ -58,46 +58,36 @@ public class VialRgbDeviceProvider : AbstractRGBDeviceProvider
 	{
 		try
 		{
-			var currentDevices = SharpVialRGB.VialRGB.GetAllDevices();
-			var currentSerials = new HashSet<string>();
-
-			// Build set of currently available device serials and test connectivity
-			foreach (var dev in currentDevices)
-			{
-				try
-				{
-					dev.Connect();
-					if (dev.Connected)
-					{
-						currentSerials.Add(dev.Serial);
-					}
-					dev.Dispose();
-				}
-				catch { }
-			}
-			
 			lock (_devicesLock)
 			{
-				// Check for disconnected devices
-				var disconnectedSerials = _devices.Keys.Where(serial => !currentSerials.Contains(serial)).ToList();
-				foreach (var serial in disconnectedSerials)
+				// Check for disconnected devices by testing connection
+				for (int i = _devices.Count - 1; i >= 0; i--)
 				{
-					if (_devices.TryGetValue(serial, out var device))
+					var device = _devices[i];
+					if (!device.DeviceInfo.RawDevice.Connected)
 					{
 						try
 						{
 							RemoveDevice(device);
 							device.Dispose();
-							_devices.Remove(serial);
+							_devices.RemoveAt(i);
 						}
 						catch { }
 					}
 				}
 
 				// Check for new devices
+				var currentDevices = SharpVialRGB.VialRGB.GetAllDevices();
+				var existingSerials = new HashSet<string>();
+				
+				foreach (var dev in _devices)
+				{
+					existingSerials.Add(dev.DeviceInfo.RawDevice.Serial);
+				}
+
 				foreach (var vialDevice in currentDevices)
 				{
-					if (!_devices.ContainsKey(vialDevice.Serial) && currentSerials.Contains(vialDevice.Serial))
+					if (!existingSerials.Contains(vialDevice.Serial))
 					{
 						try
 						{
@@ -112,7 +102,7 @@ public class VialRgbDeviceProvider : AbstractRGBDeviceProvider
 							VialRGBUpdateQueue updateQueue = new VialRGBUpdateQueue(GetUpdateTrigger(), vialDevice);
 							var newDevice = new VialRGBDevice(new VialRGBDeviceInfo(vialDevice), updateQueue);
 							
-							_devices.Add(vialDevice.Serial, newDevice);
+							_devices.Add(newDevice);
 							AddDevice(newDevice);
 						}
 						catch
@@ -120,9 +110,9 @@ public class VialRgbDeviceProvider : AbstractRGBDeviceProvider
 							try { vialDevice.Dispose(); } catch { }
 						}
 					}
-					else if (_devices.ContainsKey(vialDevice.Serial))
+					else
 					{
-						// Device already tracked, dispose the duplicate
+						// Dispose duplicate since we already have this device
 						try { vialDevice.Dispose(); } catch { }
 					}
 				}
@@ -168,7 +158,7 @@ public class VialRgbDeviceProvider : AbstractRGBDeviceProvider
 					VialRGBUpdateQueue updateQueue = new VialRGBUpdateQueue(GetUpdateTrigger(), device);
 					
 					vialDevice = new VialRGBDevice(new VialRGBDeviceInfo(device), updateQueue);
-					_devices.Add(device.Serial, vialDevice);
+					_devices.Add(vialDevice);
 				}
 				catch
 				{
@@ -194,7 +184,7 @@ public class VialRgbDeviceProvider : AbstractRGBDeviceProvider
 		
 		lock (_devicesLock)
 		{
-			foreach (var device in _devices.Values)
+			foreach (var device in _devices)
 			{
 				try { device.Dispose(); }
 				catch { }
