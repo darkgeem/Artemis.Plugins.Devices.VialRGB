@@ -58,6 +58,19 @@ public class VialRgbDeviceProvider : AbstractRGBDeviceProvider
 		try
 		{
 			var currentDevices = SharpVialRGB.VialRGB.GetAllDevices();
+			var currentSerials = new HashSet<string>();
+
+			// Build set of currently available device serials
+			foreach (var dev in currentDevices)
+			{
+				try
+				{
+					dev.Connect();
+					currentSerials.Add(dev.Serial);
+					dev.Dispose();
+				}
+				catch { }
+			}
 			
 			lock (_devicesLock)
 			{
@@ -65,27 +78,25 @@ public class VialRgbDeviceProvider : AbstractRGBDeviceProvider
 				for (int i = _devices.Count - 1; i >= 0; i--)
 				{
 					var device = _devices[i];
-					if (!device.DeviceInfo.RawDevice.Connected)
+					if (!currentSerials.Contains(device.DeviceInfo.RawDevice.Serial))
 					{
 						RemoveDevice(device);
-						_devices.RemoveAt(i);
+						device.Dispose();
 					}
+					catch { }
+					_devices.RemoveAt(i);
 				}
 
 				// Check for new devices
+				var existingSerials = new HashSet<string>();
+				foreach (var dev in _devices)
+				{
+					existingSerials.Add(dev.DeviceInfo.RawDevice.Serial);
+				}
+
 				foreach (var vialDevice in currentDevices)
 				{
-					bool isNew = true;
-					foreach (var existingDevice in _devices)
-					{
-						if (existingDevice.DeviceInfo.RawDevice.Serial == vialDevice.Serial)
-						{
-							isNew = false;
-							break;
-						}
-					}
-
-					if (isNew)
+					if (!existingSerials.Contains(vialDevice.Serial))
 					{
 						try
 						{
