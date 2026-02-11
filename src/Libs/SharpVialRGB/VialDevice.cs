@@ -12,24 +12,11 @@ public class VialDevice
     private VialRgbLed[,]? _ledsMatrixColRow;
     private Dictionary<QmkKeycode, VialRgbLed>? _ledsByKeycode;
     
+	private bool _connected = false;
     public bool Connected
 	{
-		get
-		{
-			if (_device == null) return false;
-
-			try
-			{
-				// Try to check if device is still responding
-				// This is a simple check - you might need to adjust based on HidApi.Net behavior
-				return !_device.IsDisposed;
-			}
-			catch
-			{
-				return false;
-			}
-		}
-		private set;
+		get => _connected;
+		private set => _connected = value;
 	}
     
     public int SizeX { get; private set; }
