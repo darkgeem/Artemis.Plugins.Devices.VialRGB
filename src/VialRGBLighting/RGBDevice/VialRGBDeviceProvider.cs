@@ -80,11 +80,14 @@ public class VialRgbDeviceProvider : AbstractRGBDeviceProvider
 					var device = _devices[i];
 					if (!currentSerials.Contains(device.DeviceInfo.RawDevice.Serial))
 					{
-						RemoveDevice(device);
-						device.Dispose();
+						try
+						{
+							RemoveDevice(device);
+							device.Dispose();
+							_devices.RemoveAt(i);
+						}
+						catch { }
 					}
-					catch { }
-					_devices.RemoveAt(i);
 				}
 
 				// Check for new devices
