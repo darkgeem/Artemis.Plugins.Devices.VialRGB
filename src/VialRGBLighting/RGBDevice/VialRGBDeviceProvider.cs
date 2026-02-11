@@ -23,6 +23,8 @@ public class VialRgbDeviceProvider : AbstractRGBDeviceProvider
     }
     
     private List<VialRGBDevice> _devices;
+	private System.Threading.Timer? _deviceMonitor;
+	private readonly object _devicesLock = new object();
     
     #endregion
     
@@ -42,8 +44,72 @@ public class VialRgbDeviceProvider : AbstractRGBDeviceProvider
     
     protected override void InitializeSDK()
     {
-        
+		// Start monitoring for device changes every 2 seconds
+		_deviceMonitor = new System.Threading.Timer(
+			CheckForDeviceChanges,
+			null,
+			TimeSpan.FromSeconds(2),
+			TimeSpan.FromSeconds(2)
+		);
     }
+
+	private void CheckForDeviceChanges(object? state)
+	{
+		try
+		{
+			var currentDevices = SharpVialRGB.VialRGB.GetAllDevices();
+			
+			lock (_devicesLock)
+			{
+				// Check for disconnected devices
+				for (int i = _devices.Count - 1; i >= 0; i--)
+				{
+					var device = _devices[i];
+					if (!device.DeviceInfo.RawDevice.Connected)
+					{
+						RemoveDevice(device);
+						_devices.RemoveAt(i);
+					}
+				}
+
+				// Check for new devices
+				foreach (var vialDevice in currentDevices)
+				{
+					bool isNew = true;
+					foreach (var existingDevice in _devices)
+					{
+						if (existingDevice.DeviceInfo.RawDevice.Serial == vialDevice.Serial)
+						{
+							isNew = false;
+							break;
+						}
+					}
+
+					if (isNew)
+					{
+						try
+						{
+							VialRGBUpdateQueue updateQueue = new VialRGBUpdateQueue(GetUpdateTrigger(), vialDevice);
+							vialDevice.Connect();
+							vialDevice.EnableDirectRgb();
+
+							var newDevice = new VialRGBDevice(new VialRGBDeviceInfo(vialDevice), updateQueue);
+							_devices.Add(newDevice);
+							AddDevice(newDevice);
+						}
+						catch
+						{
+							try { vialDevice.Dispose(); } catch { }
+						}
+					}
+				}
+			}
+		}
+		catch
+		{
+			// Monitoring failed, but don't crash
+		}
+	}
 
     protected override IEnumerable<IRGBDevice> LoadDevices()
     {
@@ -62,29 +128,32 @@ public class VialRgbDeviceProvider : AbstractRGBDeviceProvider
         if (devices == null)
             yield break;
 
-        foreach (var device in devices)
-        {
-			VialRGBDevice? vialDevice = null;
-			try
+		lock (_devicesLock)
+		{
+			foreach (var device in devices)
 			{
-				VialRGBUpdateQueue updateQueue = new VialRGBUpdateQueue(GetUpdateTrigger(), device);
+				VialRGBDevice? vialDevice = null;
+				try
+				{
+					VialRGBUpdateQueue updateQueue = new VialRGBUpdateQueue(GetUpdateTrigger(), device);
 
-				device.Connect();
-				device.EnableDirectRgb();
-				
-				vialDevice = new VialRGBDevice(new VialRGBDeviceInfo(device), updateQueue);
-				_devices.Add(vialDevice);
+					device.Connect();
+					device.EnableDirectRgb();
+					
+					vialDevice = new VialRGBDevice(new VialRGBDeviceInfo(device), updateQueue);
+					_devices.Add(vialDevice);
+				}
+				catch
+				{
+					// Log the exception and continue with next device
+					// This ensures one failing device doesn't crash the entire provider
+					try { device.Dispose(); } catch { }
+					continue;
+				}
+				// Only yield if device was successfully created
+				if (vialDevice != null) yield return vialDevice;
 			}
-			catch
-			{
-				// Log the exception and continue with next device
-				// This ensures one failing device doesn't crash the entire provider
-				try { device.Dispose(); } catch { }
-				continue;
-			}
-			// Only yield if device was successfully created
-			if (vialDevice != null) yield return vialDevice;
-        }
+		}
     }
 
     protected override IDeviceUpdateTrigger CreateUpdateTrigger(int id, double updateRateHardLimit)
@@ -94,13 +163,18 @@ public class VialRgbDeviceProvider : AbstractRGBDeviceProvider
 
     protected override void Dispose(bool disposing)
     {
-        foreach (var device in _devices)
-        {
-            try { device.Dispose(); }
-            catch{ /* welp */ }
-        }
-        
-        _devices.Clear();
+		_deviceMonitor?.Dispose();
+		_deviceMonitor = null;
+		lock (_devicesLock)
+		{
+			foreach (var device in _devices)
+			{
+				try { device.Dispose(); }
+				catch{ /* welp */ }
+			}
+			
+			_devices.Clear();
+		}
         _instance = null;
         
         base.Dispose(disposing);
